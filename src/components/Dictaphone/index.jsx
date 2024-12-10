@@ -1,63 +1,136 @@
 import 'regenerator-runtime/runtime';
-import React, {useState} from 'react';
-import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+import React, {useState, useRef} from 'react';
+// import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import { v4 as uuidv4 } from 'uuid';
-import { SEND_TRANSCRIPT_URL } from '../utils/constants';
+import { SEND_TRANSCRIPT_URL, UPLOAD_AUDIO_URL } from '../utils/constants';
 
 const Dictaphone = () => {
-    const {
-        transcript,
-        listening,
-        resetTranscript,
-        browserSupportsSpeechRecognition
-    } = useSpeechRecognition();
+    
     const [uuid, setUuid] = useState('');
     const [isSaved, setIsSaved] = useState(false);
+    const [listening, setListening] = useState(false);
+    const [transcript, setTranscript] = useState('');
+    const [audioUrl, setAudioUrl] = useState('');
+    const [isClone, setIsClone] = useState(false);
+    const mediaRecorderRef = useRef(null);
+    const [audioBlob, setAudioBlob] = useState(null);
+    const [mediaRecorder, setMediaRecorder] = useState(null);  
+    const [audioChunks, setAudioChunks] = useState([]); 
 
-    const handleStart = () => {
-        if(listening) return;
-        SpeechRecognition.startListening({continuous: true});
-        
-        console.log('Started listening');
-        setIsSaved(false)
+    const handleStart = async () => {
+      if(listening) return;
+      // SpeechRecognition.startListening({continuous: true});
+      setAudioChunks([])
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });  
+      const recorder = new MediaRecorder(stream);  
 
+      recorder.ondataavailable = (event) => {  
+        setAudioChunks((prev) => [...prev, event.data]);  
+      };  
+
+      recorder.start(250);  
+      setMediaRecorder(recorder); 
+      setIsSaved(false);
+      setListening(true);
     }
     // Function to handle stopping and sending transcript
     const handleStopAndSend = async () => {
-        SpeechRecognition.stopListening();
+        // SpeechRecognition.stopListening();
+        if(!mediaRecorder){
+          console.log('Audio is not working now');
+          return;
+        }
+        const recordingFinished = new Promise(resolve => {
+            mediaRecorder.onstop = () => resolve();
+        });
+
+        mediaRecorder.stop();
+        
+        // Wait for the final data
+        await recordingFinished;
+
+        // Now create the blob after we have all chunks
+        const audioBlob = new Blob(audioChunks, { 
+            type: 'audio/webm; codecs=opus'  // Changed from wav to webm
+        });
+      
+      setAudioBlob(audioBlob);
+      console.log(audioBlob)
+      
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audioElement = document.getElementById('audio-element');
+      if (audioElement) {
+          audioElement.src = audioUrl;
+          setAudioUrl(audioUrl);
+          console.log(audioUrl)
+          setListening(false);
+          
+          // Play only after ensuring the audio is loaded
+          audioElement.onloadedmetadata = () => {
+              audioElement.play().catch(e => console.error('Play failed:', e));
+          };
+      }
     };
 
     const handleSave = async () => {
-        if (transcript==='') return;
-        if(isSaved) return;
+        if(audioBlob===null) return;
+        // if(isSaved) return;
         try {
             const newUuid = uuidv4(); // Generate a new UUID
             setUuid(newUuid);
-            const response = await fetch(SEND_TRANSCRIPT_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    "ngrok-skip-browser-warning": "1",
-                },
-                    body: JSON.stringify({ transcript, uuid: newUuid })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to send transcript');
-            }
-
-            console.log('Transcript sent successfully');
-            setIsSaved(true)
+            uploadAudio(newUuid);
                 
-        } catch (error) {
-            console.error('Error sending transcript:', error);
-            alert('Failed to send transcript. Please try again later.');
+          } catch (error) {
+              console.error('Error sending audio:', error);
+              alert('Failed to send audio. Please try again later.');
+          }
+    }
+
+    const uploadAudio = async (newUuid) => {
+      if (!audioBlob) {
+          console.log('No audio blob available.');
+          return;
+      }
+  
+      // Create form data
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('uuid', newUuid);
+      formData.append('isClone', isClone);
+  
+      try {
+          // Send POST request to backend
+          const response = await fetch(UPLOAD_AUDIO_URL, { // Adjust the endpoint URL as needed
+              method: 'POST',
+              headers: {
+                  "ngrok-skip-browser-warning": "1",
+              },
+              body: formData,
+          });
+  
+          const result = await response.json();
+          if(result.status==='success'){
+            setIsSaved(true);
+            setTranscript(result.message)
+          }
+          console.log('Upload success:', result);
+      } catch (error) {
+          console.error('Error uploading audio:', error);
+      }
+  };
+  
+
+    const resetTranscript = () => {
+        setTranscript('');
+        setUuid('');
+        setIsSaved(false);
+        setIsClone(false);
+        const audioElement = document.getElementById('audio-element');
+        if (audioElement) {
+          audioElement.src = '';
         }
     }
 
-  if (!browserSupportsSpeechRecognition) {
-    return <span>Browser doesn't support speech recognition.</span>;
-  }
 
   return (
     <div className='flex flex-col w-full p-5'>
@@ -66,11 +139,13 @@ const Dictaphone = () => {
         <div className='flex gap-2'>
             <button className={`w-[100px] h-[50px] ${listening ? 'bg-green-500 disabled:opacity-50' : 'bg-red-200'}`} onClick={handleStart}>Start</button>
             <button className='w-[100px] h-[50px]' onClick={handleStopAndSend}>Stop</button>
-            <button className={`w-[100px] h-[50px] ${transcript==='' ? 'bg-gray-500 disabled:opacity-50' : 'bg-green-200'}`} onClick={handleSave}>Save</button>
+            <button className='w-[100px] h-[50px] bg-gray-500 disabled:opacity-50' onClick={handleSave}>Save</button>
             <button className='w-[100px] h-[50px]' onClick={resetTranscript}>Reset</button>
         </div>
+         <div><input type='checkbox' checked={isClone} onClick={()=>{setIsClone(!isClone)}}/> Clone my voice </div>
         {uuid && (
             <div>
+             
                 <p className='text-lg mt-4'>Use following value for your customers to identify their transcript</p>
                 <input 
                     type="text"
@@ -83,6 +158,7 @@ const Dictaphone = () => {
         )}
       </div>
       <div className='flex-1'>
+        <audio src={audioUrl} controls autoPlay id='audio-element'></audio>
         <p className='text-xl text-bold'>Transcript:</p>
         <p>{transcript}</p>
       </div>
