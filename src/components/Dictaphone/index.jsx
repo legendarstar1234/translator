@@ -12,13 +12,16 @@ const Dictaphone = () => {
     const [transcript, setTranscript] = useState('');
     const [audioUrl, setAudioUrl] = useState('');
     const [isClone, setIsClone] = useState(false);
-    const mediaRecorderRef = useRef(null);
     const [audioBlob, setAudioBlob] = useState(null);
     const [mediaRecorder, setMediaRecorder] = useState(null);  
     const [audioChunks, setAudioChunks] = useState([]); 
+    const [isLoading, setIsLoading] = useState(false);
+
+    
 
     const handleStart = async () => {
       if(listening) return;
+      if(isLoading) return;
       // SpeechRecognition.startListening({continuous: true});
       setAudioChunks([])
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });  
@@ -73,12 +76,14 @@ const Dictaphone = () => {
     };
 
     const handleSave = async () => {
+      if(isLoading) return;
         if(audioBlob===null) return;
-        // if(isSaved) return;
+        if(isSaved) return;
         try {
             const newUuid = uuidv4(); // Generate a new UUID
             setUuid(newUuid);
             uploadAudio(newUuid);
+            
                 
           } catch (error) {
               console.error('Error sending audio:', error);
@@ -91,7 +96,7 @@ const Dictaphone = () => {
           console.log('No audio blob available.');
           return;
       }
-  
+      setIsLoading(true);
       // Create form data
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
@@ -111,11 +116,13 @@ const Dictaphone = () => {
           const result = await response.json();
           if(result.status==='success'){
             setIsSaved(true);
+            setIsLoading(false);
             setTranscript(result.message)
           }
           console.log('Upload success:', result);
       } catch (error) {
           console.error('Error uploading audio:', error);
+          setIsLoading(false);
       }
   };
   
@@ -138,12 +145,17 @@ const Dictaphone = () => {
         <p className='text-xl text-bold h-[30px]'>Microphone: {listening ? 'on' : 'off'}</p>
         <div className='flex gap-2'>
             <button className={`w-[100px] h-[50px] ${listening ? 'bg-green-500 disabled:opacity-50' : 'bg-red-200'}`} onClick={handleStart}>Start</button>
-            <button className='w-[100px] h-[50px]' onClick={handleStopAndSend}>Stop</button>
-            <button className='w-[100px] h-[50px] bg-gray-500 disabled:opacity-50' onClick={handleSave}>Save</button>
-            <button className='w-[100px] h-[50px]' onClick={resetTranscript}>Reset</button>
+            <button className={`w-[100px] h-[50px] ${isLoading ? 'disabled:opacity-50' : ''}`} onClick={handleStopAndSend}>Stop</button>
+            {isLoading? 
+              <button type="button" class="bg-indigo-500 ..." disabled>
+                  Processing...
+              </button>:
+              <button className={`w-[100px] h-[50px] bg-gray-500 disabled:opacity-50`} onClick={handleSave}>Save</button>
+            }
+            <button className={`w-[100px] h-[50px] ${isLoading ? 'disabled:opacity-50' : ''}`} onClick={resetTranscript}>Reset</button>
         </div>
-         <div><input type='checkbox' checked={isClone} onClick={()=>{setIsClone(!isClone)}}/> Clone my voice </div>
-        {uuid && (
+         {/* <div><input type='checkbox' checked={isClone} onClick={()=>{setIsClone(!isClone)}}/> Clone my voice </div> */}
+        {uuid && !isLoading && (
             <div>
              
                 <p className='text-lg mt-4'>Use following value for your customers to identify their transcript</p>
