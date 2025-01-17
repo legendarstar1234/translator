@@ -144,7 +144,7 @@ const Dictaphone = () => {
       <div className='flex w-full items-center flex-col gap-2'>
         <p className='text-xl text-bold h-[30px]'>Microphone: {listening ? 'on' : 'off'}</p>
         <div className='flex gap-2'>
-            <button className={`w-[100px] h-[50px] ${listening ? 'bg-green-500 disabled:opacity-50' : 'bg-red-200'}`} onClick={handleStart}>Start</button>
+            <button className={`w-[100px] h-[50px] ${listening ? 'bg-green-500 disabled:opacity-50' : 'bg-red-200'}`} onClick={handleStart}>{listening?"Recording":"Start"}</button>
             <button className={`w-[100px] h-[50px] ${isLoading ? 'disabled:opacity-50' : ''}`} onClick={handleStopAndSend}>Stop</button>
             {isLoading? 
               <button type="button" class="bg-indigo-500 ..." disabled>

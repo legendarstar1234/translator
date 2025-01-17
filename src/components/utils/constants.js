@@ -1,4 +1,4 @@
-export const SERVER_URL = "https://db45-194-87-199-27.ngrok-free.app";
+export const SERVER_URL = "https://a07c-194-87-199-27.ngrok-free.app";
 
 export const GET_TRANSCRIPT_URL = `${SERVER_URL}/get-transcript`;
 export const SEND_TRANSCRIPT_URL = `${SERVER_URL}/send-transcript`;

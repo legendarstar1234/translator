@@ -1,4 +1,5 @@
 import Dictaphone from "../../Dictaphone";
+import AudioRecorder from "../../AudioRecorder";
 const Client = () => {
     return (
         
@@ -9,6 +10,7 @@ const Client = () => {
             }}>Customer</button>
             <div className="min-h-screen w-full flex justify-center bg-gray-200">
               <Dictaphone />
+              {/* <AudioRecorder /> */}
             </div>
         </div>
     );
